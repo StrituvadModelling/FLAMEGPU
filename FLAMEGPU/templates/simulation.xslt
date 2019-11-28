@@ -2198,18 +2198,18 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	
 
 <!-- @temp - if the agent is a BCell, reduce some values and print. -->
-<xsl:if test="../../xmml:name='AntigenList'">
-	<!-- unsigned int active_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_is_active());
+<!-- <xsl:if test="../../xmml:name='BCell'">
+	unsigned int active_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_is_active());
     unsigned int presii_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_pres_ii());
 	unsigned int resting_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_is_resting());
 	unsigned int dup_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_DUP());
 
-    printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: Active %u pres_ii %u DUP %u Resting %u\n", active_count, presii_count, dup_count, resting_count); -->
-
+    printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: Active %u pres_ii %u DUP %u Resting %u\n", active_count, presii_count, dup_count, resting_count);
+</xsl:if> -->
+<!-- <xsl:if test="../../xmml:name='AntigenList'">
 	unsigned int totag = reduce_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Ag_variable();
 	printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: TotAg %u\n", totag);
-
-</xsl:if>
+</xsl:if> -->
 
 
 }
