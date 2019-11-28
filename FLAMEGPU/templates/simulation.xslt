@@ -1484,6 +1484,9 @@ void h_add_agent_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$st
     <xsl:for-each select="../../xmml:memory/gpu:variable"><xsl:variable name="variable_name" select="xmml:name"/><xsl:variable name="variable_type" select="xmml:type" />h_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>_variable_<xsl:value-of select="$variable_name"/>_data_iteration = 0;
     </xsl:for-each>
 
+	// Update the new generated ID on the device.
+	update_device_generate_<xsl:value-of select="$agent_name"/>_id();
+
 }
 void h_add_agents_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$state" />(xmachine_memory_<xsl:value-of select="$agent_name" />** agents, unsigned int count){
 	if(count &gt; 0){
@@ -1515,6 +1518,9 @@ void h_add_agents_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$s
         // Reset host variable status flags for the relevant agent state list as the device state list has been modified.
         <xsl:for-each select="../../xmml:memory/gpu:variable"><xsl:variable name="variable_name" select="xmml:name"/><xsl:variable name="variable_type" select="xmml:type" />h_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>_variable_<xsl:value-of select="$variable_name"/>_data_iteration = 0;
         </xsl:for-each>
+
+		// Update the new generated ID on the device.
+		update_device_generate_<xsl:value-of select="$agent_name"/>_id();
 
 	}
 }
