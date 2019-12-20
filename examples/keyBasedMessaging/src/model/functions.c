@@ -22,21 +22,23 @@
 
 #define NUM_COLOURS 9
 
-__FLAME_GPU_FUNC__ int output_example(xmachine_memory_example_agent* agent, xmachine_message_example_message_list* example_message_messages){
+// Output a message
+__FLAME_GPU_FUNC__ int output_example(xmachine_memory_agent* agent, xmachine_message_msg_list* msg_messages){
 
     // 0 output a message.
-    add_example_message_message(example_message_messages, agent->id, agent->key, agent->value);
+    add_msg_message(msg_messages, agent->id, agent->key, agent->value);
 
     return 0;
 }
 
-/**
- * input_example FLAMEGPU Agent Function
- * Automatically generated using functions.xslt
- * @param agent Pointer to an agent structre of type xmachine_memory_example_agent. This represents a single agent instance and can be modified directly.
- * @param example_message_messages  example_message_messages Pointer to input message list of type xmachine_message__list. Must be passed as an argument to the get_first_example_message_message and get_next_example_message_message functions.
- */
-__FLAME_GPU_FUNC__ int input_example(xmachine_memory_example_agent* agent, xmachine_message_example_message_list* example_message_messages){
+// Iterate messages, counting how many were read and how many of them were relevant.
+#if defined(xmachine_message_msg_partitioningNone)
+__FLAME_GPU_FUNC__ int input_example(xmachine_memory_agent *agent, xmachine_message_msg_list *msg_messages)
+#endif
+#if defined(xmachine_message_msg_partitioningKeyBased)
+__FLAME_GPU_FUNC__ int input_example(xmachine_memory_agent *agent, xmachine_message_msg_list *msg_messages, xmachine_message_msg_bounds *message_bounds)
+#endif
+{
 
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -44,11 +46,16 @@ __FLAME_GPU_FUNC__ int input_example(xmachine_memory_example_agent* agent, xmach
     unsigned int count = 0;
     unsigned int sum = 0;
     // Iterate messages
-    xmachine_message_example_message *current_message = get_first_example_message_message(example_message_messages);
+    #if defined(xmachine_message_msg_partitioningNone)
+    xmachine_message_msg *current_message = get_first_msg_message(msg_messages);
+    #elif defined(xmachine_message_msg_partitioningKeyBased)
+    xmachine_message_msg *current_message = get_first_msg_message(msg_messages, message_bounds, agent->key);
+    #endif
     while (current_message)
     {
         // If the message is for the same key
-        if (agent->key == current_message->key){
+        if (agent->key == current_message->key)
+        {
             // Increment the counter
             count += 1;
             // Sum the values?
@@ -57,7 +64,11 @@ __FLAME_GPU_FUNC__ int input_example(xmachine_memory_example_agent* agent, xmach
         iterated += 1;
 
         // Get the next message in the list.
-        current_message = get_next_example_message_message(current_message, example_message_messages);
+    #if defined(xmachine_message_msg_partitioningNone)
+        current_message = get_next_msg_message(current_message, msg_messages);
+    #elif defined(xmachine_message_msg_partitioningKeyBased)
+        current_message = get_next_msg_message(current_message, msg_messages, message_bounds);
+    #endif
     }
 
     // Print stuff out

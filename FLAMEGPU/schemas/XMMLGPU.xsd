@@ -257,6 +257,18 @@
 		</xs:complexContent>
 	</xs:complexType>
 	<xs:element substitutionGroup="partitioningNone" name="partitioningGraphEdge" type="partitioningGraphEdge_type" />
+	<xs:complexType name="partitioningKeyBased_type">
+		<xs:complexContent>
+			<xs:extension base="partitioning_type">
+				<xs:sequence>
+					<xs:element name="messageKey" type="xs:string" />
+					<xs:element name="maxKey" type="xs:int" />
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:element substitutionGroup="partitioningNone" name="partitioningKeyBased" type="partitioningKeyBased_type" />
+
 	<xs:element name="initFunction">
 		<xs:complexType>
 			<xs:sequence>

@@ -151,7 +151,7 @@ struct __align__(16) xmachine_memory_<xsl:value-of select="xmml:name"/>
 /* Message structures */
 <xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message">
 /** struct xmachine_message_<xsl:value-of select="xmml:name"/>
- * <xsl:if test="gpu:partitioningNone">Brute force: No Partitioning</xsl:if><xsl:if test="gpu:partitioningDiscrete">Discrete Partitioning</xsl:if><xsl:if test="gpu:partitioningSpatial">Spatial Partitioning</xsl:if><xsl:if test="gpu:partitioningGraphEdge">Graph Edge Partitioning</xsl:if>
+ * <xsl:if test="gpu:partitioningNone">Brute force: No Partitioning</xsl:if><xsl:if test="gpu:partitioningDiscrete">Discrete Partitioning</xsl:if><xsl:if test="gpu:partitioningSpatial">Spatial Partitioning</xsl:if><xsl:if test="gpu:partitioningGraphEdge">Graph Edge Partitioning</xsl:if><xsl:if test="gpu:partitioningKeyBased">Key-based Partitioning</xsl:if>
  * Holds all message variables and is aligned to help with coalesced reads on the GPU
  */
 struct __align__(16) xmachine_message_<xsl:value-of select="xmml:name"/>
@@ -164,6 +164,8 @@ struct __align__(16) xmachine_message_<xsl:value-of select="xmml:name"/>
     int _cell_index_max;    /**&lt; Max boundary value of current cell */
     glm::ivec3 _agent_grid_cell;  /**&lt; Agents partition cell position */
     int _cell_index;        /**&lt; Index of position in current cell */</xsl:if><xsl:if test="gpu:partitioningGraphEdge">/* Graph Edge partitioning Variables */
+    unsigned int _position;          /**&lt; 1D position of message in linear message list.*/ </xsl:if>
+    <xsl:if test="gpu:partitioningKeyBased">/* Graph Edge partitioning Variables */
     unsigned int _position;          /**&lt; 1D position of message in linear message list.*/ </xsl:if><xsl:text>  
     </xsl:text><xsl:for-each select="xmml:variables/gpu:variable"><xsl:text>  
     </xsl:text><xsl:value-of select="xmml:type"/><xsl:text> </xsl:text><xsl:value-of select="xmml:name"/>;        /**&lt; Message variable <xsl:value-of select="xmml:name"/> of type <xsl:value-of select="xmml:type"/>.*/</xsl:for-each>
@@ -191,7 +193,7 @@ struct xmachine_memory_<xsl:value-of select="xmml:name"/>_list
 /* Message lists. Structure of Array (SoA) for memory coalescing on GPU */
 <xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message">
 /** struct xmachine_message_<xsl:value-of select="xmml:name"/>_list
- * <xsl:if test="gpu:partitioningNone">Brute force: No Partitioning</xsl:if><xsl:if test="gpu:partitioningDiscrete">Discrete Partitioning</xsl:if><xsl:if test="gpu:partitioningSpatial">Spatial Partitioning</xsl:if><xsl:if test="gpu:partitioningGraphEdge">Graph Edge Partitioning</xsl:if>
+ * <xsl:if test="gpu:partitioningNone">Brute force: No Partitioning</xsl:if><xsl:if test="gpu:partitioningDiscrete">Discrete Partitioning</xsl:if><xsl:if test="gpu:partitioningSpatial">Spatial Partitioning</xsl:if><xsl:if test="gpu:partitioningGraphEdge">Graph Edge Partitioning</xsl:if><xsl:if test="gpu:partitioningKeyBased">Key-based Partitioning</xsl:if>
  * Structure of Array for memory coalescing 
  */
 struct xmachine_message_<xsl:value-of select="xmml:name"/>_list
@@ -304,6 +306,29 @@ struct xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer
 </xsl:if></xsl:for-each>
 
 
+/* Key-based Partitioned message boundary structures */<xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message"><xsl:if test="gpu:partitioningKeyBased">
+<xsl:variable name="maxKey" select="gpu:partitioningKeyBased/gpu:maxKey"/>
+/** struct xmachine_message_<xsl:value-of select="xmml:name"/>_bounds
+ * Key-based Communication boundary data structure, used to access messages for the correct edge.
+ * Contains an array of the first message index per edge, and an array containing the number of messages per edge. 
+ */
+struct xmachine_message_<xsl:value-of select="xmml:name"/>_bounds
+{
+    unsigned int start[<xsl:value-of select="$maxKey"/>];
+    unsigned int count[<xsl:value-of select="$maxKey"/>];
+};
+
+/** struct xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer
+ * Key-based Communication temporary data structure, used during the scattering of message data from the output location to the sorted location
+ */
+struct xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer
+{
+    unsigned int edge_local_index[xmachine_message_<xsl:value-of select="xmml:name"/>_MAX];
+    unsigned int unsorted_edge_index[xmachine_message_<xsl:value-of select="xmml:name"/>_MAX];
+};
+</xsl:if></xsl:for-each>
+
+
 /* Graph utility functions, usable in agent functions and implemented in FLAMEGPU_Kernels */
 <xsl:for-each select="gpu:xmodel/gpu:environment/gpu:graphs/gpu:staticGraph">
 <xsl:variable name="graph_name" select="gpu:name" />
@@ -366,14 +391,14 @@ __FLAME_GPU_FUNC__ float rnd(RNG_rand48* rand48);
  <xsl:if test="gpu:RNG='true'">* @param rand48 Pointer to the seed list of type RNG_rand48. Must be passed as an argument to the rand48 function for generating random numbers on the GPU.</xsl:if>
  */
 __FLAME_GPU_FUNC__ int <xsl:value-of select="xmml:name"/>(xmachine_memory_<xsl:value-of select="../../xmml:name"/>* agent<xsl:if test="xmml:xagentOutputs/gpu:xagentOutput">, xmachine_memory_<xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_list* <xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_agents</xsl:if>
-<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, xmachine_message_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_list* <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, xmachine_message_<xsl:value-of select="xmml:name"/>_PBM* partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if></xsl:for-each></xsl:if>
+<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, xmachine_message_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_list* <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, xmachine_message_<xsl:value-of select="xmml:name"/>_PBM* partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if><xsl:if test="gpu:partitioningKeyBased">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if></xsl:for-each></xsl:if>
 <xsl:if test="xmml:outputs/gpu:output">, xmachine_message_<xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_list* <xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_messages</xsl:if>
 <xsl:if test="gpu:RNG='true'">, RNG_rand48* rand48</xsl:if>);
 </xsl:for-each>
 
 <xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message">
   
-/* Message Function Prototypes for <xsl:if test="gpu:partitioningNone">Brute force (No Partitioning) </xsl:if><xsl:if test="gpu:partitioningDiscrete">Discrete Partitioned </xsl:if><xsl:if test="gpu:partitioningSpatial">Spatially Partitioned </xsl:if><xsl:if test="gpu:partitioningGraphEdge">On-Graph Partitioned </xsl:if> <xsl:value-of select="xmml:name"/> message implemented in FLAMEGPU_Kernels */
+/* Message Function Prototypes for <xsl:if test="gpu:partitioningNone">Brute force (No Partitioning) </xsl:if><xsl:if test="gpu:partitioningDiscrete">Discrete Partitioned </xsl:if><xsl:if test="gpu:partitioningSpatial">Spatially Partitioned </xsl:if><xsl:if test="gpu:partitioningGraphEdge">On-Graph Partitioned </xsl:if><xsl:if test="gpu:partitioningKeyBased">Key Partitioned </xsl:if> <xsl:value-of select="xmml:name"/> message implemented in FLAMEGPU_Kernels */
 
 /** add_<xsl:value-of select="xmml:name"/>_message
  * Function for all types of message partitioning
@@ -446,6 +471,25 @@ __FLAME_GPU_FUNC__ xmachine_message_<xsl:value-of select="xmml:name"/> * get_fir
 
 /** get_next_<xsl:value-of select="xmml:name"/>_message
  * Get next message function for graph edge partitioned communication messages
+ * @param current The current message
+ * @param <xsl:value-of select="xmml:name"/>_messages list of messages
+ * @param message_bounds boundary structure providing information about each message
+ * @return returns the next message from the message list 
+ */
+__FLAME_GPU_FUNC__ xmachine_message_<xsl:value-of select="xmml:name"/> * get_next_<xsl:value-of select="xmml:name"/>_message(xmachine_message_<xsl:value-of select="xmml:name"/>* current, xmachine_message_<xsl:value-of select="xmml:name"/>_list* <xsl:value-of select="xmml:name"/>_messages, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds);
+</xsl:if>
+
+<xsl:if test="gpu:partitioningKeyBased">/** get_first_<xsl:value-of select="xmml:name"/>_message
+ * Get first message function for key-partitioned communication messages
+ * @param <xsl:value-of select="xmml:name"/>_messages message list 
+ * @param message_bounds boundary structure providing information about each message
+ * @param <xsl:value-of select="gpu:partitioningKeyBased/gpu:messageKey"/> key to retrieve messages for
+ * @return returns the first message from the message list 
+ */
+__FLAME_GPU_FUNC__ xmachine_message_<xsl:value-of select="xmml:name"/> * get_first_<xsl:value-of select="xmml:name"/>_message(xmachine_message_<xsl:value-of select="xmml:name"/>_list* <xsl:value-of select="xmml:name"/>_messages, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds, unsigned int <xsl:value-of select="gpu:partitioningKeyBased/gpu:messageKey"/>);
+
+/** get_next_<xsl:value-of select="xmml:name"/>_message
+ * Get next message function for key-partitioned communication messages
  * @param current The current message
  * @param <xsl:value-of select="xmml:name"/>_messages list of messages
  * @param message_bounds boundary structure providing information about each message

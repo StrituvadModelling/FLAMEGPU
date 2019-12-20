@@ -8,7 +8,7 @@
   </gpu:environment>
   <xagents>
     <gpu:xagent>
-      <name>example_agent</name>
+      <name>agent</name>
       <memory>
         <gpu:variable>
           <type>unsigned int</type>
@@ -30,7 +30,7 @@
           <nextState>default</nextState>
           <outputs>
             <gpu:output>
-              <messageName>example_message</messageName>
+              <messageName>msg</messageName>
               <gpu:type>single_message</gpu:type>
             </gpu:output>
           </outputs>
@@ -43,7 +43,7 @@
           <nextState>default</nextState>
           <inputs>
             <gpu:input>
-              <messageName>example_message</messageName>
+              <messageName>msg</messageName>
             </gpu:input>
           </inputs>
           <gpu:reallocate>false</gpu:reallocate>
@@ -62,7 +62,7 @@
   </xagents>
   <messages>
     <gpu:message>
-      <name>example_message</name>
+      <name>msg</name>
       <variables>
         <gpu:variable>
           <type>unsigned int</type>
@@ -77,7 +77,14 @@
           <name>value</name>
         </gpu:variable>
       </variables>
-      <gpu:partitioningNone/>
+
+      <!-- <gpu:partitioningNone/> -->
+      
+      <gpu:partitioningKeyBased>
+        <gpu:messageKey>key</gpu:messageKey>
+        <gpu:maxKey>12</gpu:maxKey>
+      </gpu:partitioningKeyBased>
+
       <gpu:bufferSize>1024</gpu:bufferSize>
     </gpu:message>
   </messages>

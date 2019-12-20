@@ -5,49 +5,49 @@
 	</environment>	
 
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>0</id>
 		<key>0</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>1</id>
 		<key>1</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>2</id>
 		<key>1</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>3</id>
 		<key>2</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>4</id>
 		<key>2</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>5</id>
 		<key>2</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>6</id>
 		<key>3</key>
 		<value>0</value>
 	</xagent>
 	<xagent>
-		<name>example_agent</name>
+		<name>agent</name>
 		<id>7</id>
 		<key>3</key>
 		<value>0</value>
