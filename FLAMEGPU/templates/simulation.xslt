@@ -2294,6 +2294,16 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: TotAg %u\n", totag);
 </xsl:if> -->
 
+<!-- <xsl:if test="../../xmml:name='AntigenList'">
+	unsigned int totag = reduce_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Ag_variable();
+	unsigned int maxag = max_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Ag_variable();
+	printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: TotAg %u MaxAg %u\n", totag, maxag);
+</xsl:if> -->
+
+	<!-- unsigned int totag = reduce_AntigenList_AntigenListDefault_Ag_variable();
+	unsigned int maxag = max_AntigenList_AntigenListDefault_Ag_variable();
+	printf("LayerDebug: <xsl:value-of select="xmml:name"/> AntigenList:: TotAg %u MaxAg %u\n", totag, maxag); -->
+
 
 }
 
@@ -2302,7 +2312,7 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
     
 
 <xsl:for-each select="gpu:xmodel/xmml:xagents/gpu:xagent/xmml:states/gpu:state"> 
-extern void reset_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>_count()
+extern void reset_AntigenList_<xsl:value-of select="xmml:name"/>_count()
 {
     h_xmachine_memory_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>_count = 0;
 }
