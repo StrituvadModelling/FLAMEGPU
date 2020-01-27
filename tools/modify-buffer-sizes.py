@@ -216,6 +216,7 @@ def update_buffer_sizes(args, xml_in):
     section_0 = []
     for k, v in buffer_sizes_id_only.items():
         section_0.append([k, "", str(v["val"])])
+        v["xml"].text = str(v["val"])
     section_0 = sorted(section_0, key=lambda row: row[0])
     section_0 = sorted(section_0, key=lambda row: str2int(row[2]), reverse=True)
 
