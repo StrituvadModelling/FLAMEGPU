@@ -241,6 +241,10 @@ int h_message_<xsl:value-of select="xmml:name"/>_output_type;   /**&lt; message 
 unsigned int h_message_<xsl:value-of select="xmml:name"/>_count;         /**&lt; message list counter*/
 int h_message_<xsl:value-of select="xmml:name"/>_output_type;   /**&lt; message output type (single or optional)*/
 </xsl:if>
+<xsl:if test="gpu:partitioningKeyBased">/* Key Partitioned message variables  */
+unsigned int h_message_<xsl:value-of select="xmml:name"/>_count;         /**&lt; message list counter*/
+int h_message_<xsl:value-of select="xmml:name"/>_output_type;   /**&lt; message output type (single or optional)*/
+</xsl:if>
 <xsl:if test="gpu:partitioningSpatial">/* Spatial Partitioning Variables*/
 #ifdef FAST_ATOMIC_SORTING
 	uint * d_xmachine_message_<xsl:value-of select="xmml:name"/>_local_bin_index;	  /**&lt; index offset within the assigned bin */
@@ -273,6 +277,15 @@ int h_tex_xmachine_message_<xsl:value-of select="xmml:name"/>_pbm_start_offset;
 int h_tex_xmachine_message_<xsl:value-of select="xmml:name"/>_pbm_end_or_count_offset;
 </xsl:if></xsl:if>
 <xsl:if test="gpu:partitioningGraphEdge">/* On-Graph Partitioning Variables */
+// Message bounds structure
+xmachine_message_<xsl:value-of select="xmml:name"/>_bounds * d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds;
+// Temporary data used during the scattering of messages
+xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer * d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer; 
+// Values for CUB exclusive scan of spatially partitioned variables
+void * d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name" />;
+size_t temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name" />;
+</xsl:if>
+<xsl:if test="gpu:partitioningKeyBased">/* Key Partitioning Variables */
 // Message bounds structure
 xmachine_message_<xsl:value-of select="xmml:name"/>_bounds * d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds;
 // Temporary data used during the scattering of messages
@@ -610,6 +623,21 @@ void initialise(char * inputfile){
         staticGraph_<xsl:value-of select="gpu:partitioningGraphEdge/gpu:environmentGraph"/>_edge_bufferSize
     );
     gpuErrchk(cudaMalloc(&amp;d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/>, temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/>));
+  </xsl:if>
+  <xsl:if test="gpu:partitioningKeyBased"><xsl:variable name="maxKey" select="gpu:partitioningKeyBased/gpu:maxKey"/>
+  gpuErrchk(cudaMalloc((void**)&amp;d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds, sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>_bounds)));
+  gpuErrchk(cudaMalloc((void**)&amp;d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer, sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer)));
+  /* Calculate and allocate CUB temporary memory for exclusive scans */
+    d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/> = nullptr;
+    temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/> = 0;
+    cub::DeviceScan::ExclusiveSum(
+        d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/>, 
+        temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/>, 
+        (unsigned int*) nullptr, 
+        (unsigned int*) nullptr, 
+        <xsl:value-of select="$maxKey"/>
+    );
+    gpuErrchk(cudaMalloc(&amp;d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/>, temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/>));
   </xsl:if><xsl:text>
 	</xsl:text></xsl:for-each>	
 
@@ -854,6 +882,13 @@ void cleanup(){
   gpuErrchk(cudaFree(d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/>));
   d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/> = nullptr;
   temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/> = 0;
+  </xsl:if>
+  <xsl:if test="gpu:partitioningKeyBased">
+  gpuErrchk(cudaFree(d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds));
+  gpuErrchk(cudaFree(d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer));
+  gpuErrchk(cudaFree(d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/>));
+  d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/> = nullptr;
+  temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/> = 0;
   </xsl:if><xsl:text>
 	</xsl:text></xsl:for-each>
 
@@ -905,7 +940,7 @@ PROFILE_SCOPED_RANGE("singleIteration");
     // Increment the iteration number.
     g_iterationNumber++;
 
-  /* set all non partitioned, spatial partitioned and On-Graph Partitioned message counts to 0*/<xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message"><xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge">
+  /* set all non partitioned, spatial partitioned, On-Graph Partitioned and key-partitionged message counts to 0*/<xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message"><xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">
 	h_message_<xsl:value-of select="xmml:name"/>_count = 0;
 	//upload to device constant
 	gpuErrchk(cudaMemcpyToSymbol( d_message_<xsl:value-of select="xmml:name"/>_count, &amp;h_message_<xsl:value-of select="xmml:name"/>_count, sizeof(int)));
@@ -1484,6 +1519,9 @@ void h_add_agent_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$st
     <xsl:for-each select="../../xmml:memory/gpu:variable"><xsl:variable name="variable_name" select="xmml:name"/><xsl:variable name="variable_type" select="xmml:type" />h_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>_variable_<xsl:value-of select="$variable_name"/>_data_iteration = 0;
     </xsl:for-each>
 
+	// Update the new generated ID on the device.
+	update_device_generate_<xsl:value-of select="$agent_name"/>_id();
+
 }
 void h_add_agents_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$state" />(xmachine_memory_<xsl:value-of select="$agent_name" />** agents, unsigned int count){
 	if(count &gt; 0){
@@ -1515,6 +1553,9 @@ void h_add_agents_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$s
         // Reset host variable status flags for the relevant agent state list as the device state list has been modified.
         <xsl:for-each select="../../xmml:memory/gpu:variable"><xsl:variable name="variable_name" select="xmml:name"/><xsl:variable name="variable_type" select="xmml:type" />h_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>_variable_<xsl:value-of select="$variable_name"/>_data_iteration = 0;
         </xsl:for-each>
+
+		// Update the new generated ID on the device.
+		update_device_generate_<xsl:value-of select="$agent_name"/>_id();
 
 	}
 }
@@ -1603,12 +1644,15 @@ int <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>_
   <xsl:if test="gpu:partitioningGraphEdge">//Continuous agent and message input is On-Graph Partitioned
   sm_size += (blockSize * sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>));
   </xsl:if>
+  <xsl:if test="gpu:partitioningKeyBased">//Continuous agent and message input is key-based Partitioned
+  sm_size += (blockSize * sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>));
+  </xsl:if>
 	//all continuous agent types require single 32bit word per thread offset (to avoid sm bank conflicts)
 	sm_size += (blockSize * PADDING);
 	</xsl:for-each>
 	</xsl:if><xsl:if test="../../gpu:type='discrete'">
 	<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messageName]">
-  <xsl:if test="gpu:partitioningNone  or gpu:partitioningSpatial or gpu:partitioningGraphEdge">//Discrete agent continuous message input
+  <xsl:if test="gpu:partitioningNone  or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">//Discrete agent continuous message input
 	sm_size += (blockSize * sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>));
 	//all continuous agent types require single 32bit word per thread offset (to avoid sm bank conflicts)
 	sm_size += (blockSize * PADDING);
@@ -1885,7 +1929,7 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	<xsl:if test="xmml:outputs/gpu:output"><xsl:variable name="messageName" select="xmml:outputs/gpu:output/xmml:messageName"/><xsl:variable name="outputType" select="xmml:outputs/gpu:output/gpu:type"/>
 	//SET THE OUTPUT MESSAGE TYPE FOR CONTINUOUS AGENTS
 	<xsl:if test="../../gpu:type='continuous'"><xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messageName]">
-  <xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge">//Set the message_type for non partitioned, spatially partitioned and On-Graph Partitioned message outputs
+  <xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">//Set the message_type for non partitioned, spatially partitioned, On-Graph Partitioned and key-Partitioned message outputs
 	h_message_<xsl:value-of select="xmml:name"/>_output_type = <xsl:value-of select="$outputType"/>;
 	gpuErrchk( cudaMemcpyToSymbol( d_message_<xsl:value-of select="xmml:name"/>_output_type, &amp;h_message_<xsl:value-of select="xmml:name"/>_output_type, sizeof(int)));
 	<xsl:if test="$outputType='optional_message'">//message is optional so reset the swap
@@ -1911,7 +1955,7 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	//Output       : <xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>
 	//Agent Output : <xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>
 	GPUFLAME_<xsl:value-of select="xmml:name"/>&lt;&lt;&lt;g, b, sm_size, stream&gt;&gt;&gt;(d_<xsl:value-of select="../../xmml:name"/>s<xsl:if test="xmml:xagentOutputs/gpu:xagentOutput">, d_<xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>s_new</xsl:if>
-		<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, d_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>s<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, d_<xsl:value-of select="xmml:name"/>_partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds</xsl:if></xsl:for-each></xsl:if>
+		<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, d_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>s<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, d_<xsl:value-of select="xmml:name"/>_partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds</xsl:if><xsl:if test="gpu:partitioningKeyBased">, d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds</xsl:if></xsl:for-each></xsl:if>
 		<xsl:if test="xmml:outputs/gpu:output">, d_<xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>s<xsl:if test="xmml:outputs/gpu:output/xmml:type='optional_message'">_swap</xsl:if></xsl:if>
 		<xsl:if test="gpu:RNG='true'">, d_rand48</xsl:if>);
 	gpuErrchkLaunch();
@@ -1930,7 +1974,7 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	<xsl:if test="xmml:outputs/gpu:output"><xsl:variable name="messageName" select="xmml:outputs/gpu:output/xmml:messageName"/><xsl:variable name="outputType" select="xmml:outputs/gpu:output/gpu:type"/><xsl:variable name="xagentName" select="../../xmml:name"/>
 	//CONTINUOUS AGENTS SCATTER NON PARTITIONED OPTIONAL OUTPUT MESSAGES
 	<xsl:if test="../../gpu:type='continuous'"><xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messageName]">
-  <xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge">
+  <xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">
 	<xsl:if test="$outputType='optional_message'">//<xsl:value-of select="xmml:name"/> Message Type Prefix Sum
 	<!-- Twin Karmakharm bug fix 16/09/2014 - Bug found need to swap the message array so that it gets scanned properly -->
 	//swap output
@@ -1959,7 +2003,7 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	<xsl:if test="xmml:outputs/gpu:output"><xsl:variable name="messageName" select="xmml:outputs/gpu:output/xmml:messageName"/><xsl:variable name="outputType" select="xmml:outputs/gpu:output/gpu:type"/><xsl:variable name="xagentName" select="../../xmml:name"/>
 	//UPDATE MESSAGE COUNTS FOR CONTINUOUS AGENTS WITH NON PARTITIONED MESSAGE OUTPUT <xsl:if test="../../gpu:type='continuous'">
 	<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messageName]">
-  <xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge">
+  <xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">
 	<xsl:if test="$outputType='optional_message'">
 	gpuErrchk( cudaMemcpy( &amp;scan_last_sum, &amp;d_<xsl:value-of select="xmml:name"/>s_swap->_position[h_xmachine_memory_<xsl:value-of select="$xagentName"/>_count-1], sizeof(int), cudaMemcpyDeviceToHost));
 	gpuErrchk( cudaMemcpy( &amp;scan_last_included, &amp;d_<xsl:value-of select="xmml:name"/>s_swap->_scan_input[h_xmachine_memory_<xsl:value-of select="$xagentName"/>_count-1], sizeof(int), cudaMemcpyDeviceToHost));
@@ -2155,6 +2199,45 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 
   </xsl:if>
 
+  <xsl:if test="gpu:partitioningKeyBased">
+  <xsl:variable name="maxKey" select="gpu:partitioningKeyBased/gpu:maxKey"/>
+  // Sort messages based on the key, and construct the relevant data structure for key-based messaging. Keys are sorted and then message data is scattered. 
+
+  // Reset the message bounds data structure to 0
+  gpuErrchk(cudaMemset((void*)d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds, 0, sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>_bounds)));
+
+  // If there are any messages output (to account for 0 optional messages)
+  if (h_message_<xsl:value-of select="xmml:name"/>_count > 0){
+  // Build histogram using atomics
+  cudaOccupancyMaxPotentialBlockSizeVariableSMem(&amp;minGridSize, &amp;blockSize, hist_<xsl:value-of select="xmml:name"/>_messages, no_sm, h_message_<xsl:value-of select="xmml:name"/>_count);
+  gridSize = (h_message_<xsl:value-of select="xmml:name"/>_count + blockSize - 1) / blockSize;
+  hist_<xsl:value-of select="xmml:name"/>_messages &lt;&lt;&lt;gridSize, blockSize, 0, stream &gt;&gt;&gt;(d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer-&gt;edge_local_index, d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer-&gt;unsorted_edge_index, d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds-&gt;count, d_<xsl:value-of select="xmml:name"/>s, h_message_<xsl:value-of select="xmml:name"/>_count);
+  gpuErrchkLaunch();
+
+  // Exclusive scan on histogram output to find the index for each message for each edge/bucket
+  cub::DeviceScan::ExclusiveSum(
+      d_temp_scan_storage_xmachine_message_<xsl:value-of select="xmml:name"/>,
+      temp_scan_bytes_xmachine_message_<xsl:value-of select="xmml:name"/>,
+      d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds-&gt;count,
+      d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds-&gt;start,
+      <xsl:value-of select="$maxKey"/>, 
+      stream
+  );
+  gpuErrchkLaunch();
+//@todo - modify edge_local_index with something key appropraite.
+  // Launch kernel to re-order (scatter) the messages
+  cudaOccupancyMaxPotentialBlockSizeVariableSMem(&amp;minGridSize, &amp;blockSize, reorder_<xsl:value-of select="xmml:name"/>_messages, no_sm, h_message_<xsl:value-of select="xmml:name"/>_count);
+  gridSize = (h_message_<xsl:value-of select="xmml:name"/>_count + blockSize - 1) / blockSize;  // Round up according to array size
+  reorder_<xsl:value-of select="xmml:name"/>_messages &lt;&lt;&lt;gridSize, blockSize, 0, stream &gt;&gt;&gt;(d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer-&gt;edge_local_index, d_xmachine_message_<xsl:value-of select="xmml:name"/>_scatterer-&gt;unsorted_edge_index, d_xmachine_message_<xsl:value-of select="xmml:name"/>_bounds-&gt;start, d_<xsl:value-of select="xmml:name"/>s, d_<xsl:value-of select="xmml:name"/>s_swap, h_message_<xsl:value-of select="xmml:name"/>_count);
+  gpuErrchkLaunch();
+  }
+  // Pointer swap the double buffers.
+  xmachine_message_<xsl:value-of select="xmml:name"/>_list* d_<xsl:value-of select="xmml:name"/>s_temp = d_<xsl:value-of select="xmml:name"/>s;
+  d_<xsl:value-of select="xmml:name"/>s = d_<xsl:value-of select="xmml:name"/>s_swap;
+  d_<xsl:value-of select="xmml:name"/>s_swap = d_<xsl:value-of select="xmml:name"/>s_temp;
+
+  </xsl:if>
+
 	</xsl:for-each>
 	</xsl:if>
 	
@@ -2196,6 +2279,32 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 	</xsl:when>
   </xsl:choose>
 	
+
+<!-- @temp - if the agent is a BCell, reduce some values and print. -->
+<!-- <xsl:if test="../../xmml:name='BCell'">
+	unsigned int active_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_is_active());
+    unsigned int presii_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_pres_ii());
+	unsigned int resting_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_is_resting());
+	unsigned int dup_count = countif_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Flags_variable(countif_DUP());
+
+    printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: Active %u pres_ii %u DUP %u Resting %u\n", active_count, presii_count, dup_count, resting_count);
+</xsl:if> -->
+<!-- <xsl:if test="../../xmml:name='AntigenList'">
+	unsigned int totag = reduce_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Ag_variable();
+	printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: TotAg %u\n", totag);
+</xsl:if> -->
+
+<!-- <xsl:if test="../../xmml:name='AntigenList'">
+	unsigned int totag = reduce_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Ag_variable();
+	unsigned int maxag = max_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="../../xmml:name"/>Default_Ag_variable();
+	printf("LayerDebug: <xsl:value-of select="xmml:name"/> <xsl:value-of select="../../xmml:name"/>:: TotAg %u MaxAg %u\n", totag, maxag);
+</xsl:if> -->
+
+	<!-- unsigned int totag = reduce_AntigenList_AntigenListDefault_Ag_variable();
+	unsigned int maxag = max_AntigenList_AntigenListDefault_Ag_variable();
+	printf("LayerDebug: <xsl:value-of select="xmml:name"/> AntigenList:: TotAg %u MaxAg %u\n", totag, maxag); -->
+
+
 }
 
 
@@ -2203,7 +2312,7 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
     
 
 <xsl:for-each select="gpu:xmodel/xmml:xagents/gpu:xagent/xmml:states/gpu:state"> 
-extern void reset_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>_count()
+extern void reset_AntigenList_<xsl:value-of select="xmml:name"/>_count()
 {
     h_xmachine_memory_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>_count = 0;
 }

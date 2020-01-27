@@ -68,7 +68,7 @@ __FLAME_GPU_HOST_LAYER_FUNC__ void <xsl:value-of select="gpu:name"/>(){
  <xsl:if test="gpu:RNG='true'">* @param rand48 Pointer to the seed list of type RNG_rand48. Must be passed as an argument to the rand48 function for generating random numbers on the GPU.</xsl:if>
  */
 __FLAME_GPU_FUNC__ int <xsl:value-of select="xmml:name"/>(xmachine_memory_<xsl:value-of select="../../xmml:name"/>* agent<xsl:if test="xmml:xagentOutputs/gpu:xagentOutput">, xmachine_memory_<xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_list* <xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_agents</xsl:if>
-<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, xmachine_message_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_list* <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, xmachine_message_<xsl:value-of select="xmml:name"/>_PBM* partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if></xsl:for-each></xsl:if>
+<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, xmachine_message_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_list* <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, xmachine_message_<xsl:value-of select="xmml:name"/>_PBM* partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if><xsl:if test="gpu:partitioningKeyBased">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if></xsl:for-each></xsl:if>
 <xsl:if test="xmml:outputs/gpu:output">, xmachine_message_<xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_list* <xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_messages</xsl:if>
 <xsl:if test="gpu:RNG='true'">, RNG_rand48* rand48</xsl:if>){
     <xsl:variable name="agent_type" select="../../gpu:type" />
@@ -88,13 +88,16 @@ __FLAME_GPU_FUNC__ int <xsl:value-of select="xmml:name"/>(xmachine_memory_<xsl:v
     <xsl:if test="gpu:partitioningGraphEdge">
     unsigned int edgeIndex = 0;
     </xsl:if>
+    <xsl:if test="gpu:partitioningKeyBased">
+    unsigned int messageKey = 0;
+    </xsl:if>
     //Template for input message iteration
-    xmachine_message_<xsl:value-of select="$messagename"/>* current_message = get_first_<xsl:value-of select="$messagename"/>_message<xsl:if test="gpu:partitioningDiscrete">&lt;<xsl:if test="$agent_type='continuous'">CONTINUOUS</xsl:if><xsl:if test="$agent_type='discrete'">DISCRETE_2D</xsl:if>&gt;</xsl:if>(<xsl:value-of select="$messagename"/>_messages<xsl:if test="gpu:partitioningSpatial">, partition_matrix, agent_x, agent_y, agent_z</xsl:if><xsl:if test="gpu:partitioningDiscrete">, agent_x, agent_y</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, message_bounds, edgeIndex</xsl:if>);
+    xmachine_message_<xsl:value-of select="$messagename"/>* current_message = get_first_<xsl:value-of select="$messagename"/>_message<xsl:if test="gpu:partitioningDiscrete">&lt;<xsl:if test="$agent_type='continuous'">CONTINUOUS</xsl:if><xsl:if test="$agent_type='discrete'">DISCRETE_2D</xsl:if>&gt;</xsl:if>(<xsl:value-of select="$messagename"/>_messages<xsl:if test="gpu:partitioningSpatial">, partition_matrix, agent_x, agent_y, agent_z</xsl:if><xsl:if test="gpu:partitioningDiscrete">, agent_x, agent_y</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, message_bounds, edgeIndex</xsl:if><xsl:if test="gpu:partitioningKeyBased">, message_bounds, messageKey</xsl:if>);
     while (current_message)
     {
         //INSERT MESSAGE PROCESSING CODE HERE
         
-        current_message = get_next_<xsl:value-of select="$messagename"/>_message<xsl:if test="gpu:partitioningDiscrete">&lt;<xsl:if test="$agent_type='continuous'">CONTINUOUS</xsl:if><xsl:if test="$agent_type='discrete'">DISCRETE_2D</xsl:if>&gt;</xsl:if>(current_message, <xsl:value-of select="$messagename"/>_messages<xsl:if test="gpu:partitioningSpatial">, partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, message_bounds</xsl:if>);
+        current_message = get_next_<xsl:value-of select="$messagename"/>_message<xsl:if test="gpu:partitioningDiscrete">&lt;<xsl:if test="$agent_type='continuous'">CONTINUOUS</xsl:if><xsl:if test="$agent_type='discrete'">DISCRETE_2D</xsl:if>&gt;</xsl:if>(current_message, <xsl:value-of select="$messagename"/>_messages<xsl:if test="gpu:partitioningSpatial">, partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, message_bounds</xsl:if><xsl:if test="gpu:partitioningKeyBased">, message_bounds</xsl:if>);
     }
     */
     </xsl:for-each></xsl:if><xsl:if test="xmml:outputs/gpu:output">

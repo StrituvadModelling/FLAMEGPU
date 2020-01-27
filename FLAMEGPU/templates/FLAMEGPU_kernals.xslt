@@ -26,7 +26,7 @@ __constant__ int d_xmachine_memory_<xsl:value-of select="../../xmml:name"/>_<xsl
 /* Message constants */
 <xsl:for-each select="gpu:xmodel/xmml:messages/gpu:message">
 /* <xsl:value-of select="xmml:name"/> Message variables */
-<xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge">/* Non partitioned, spatial partitioned and on-graph partitioned message variables  */
+<xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">/* Non partitioned, spatial partitioned, on-graph partitioned or key-based message variables  */
 __constant__ int d_message_<xsl:value-of select="xmml:name"/>_count;         /**&lt; message list counter*/
 __constant__ int d_message_<xsl:value-of select="xmml:name"/>_output_type;   /**&lt; message output type (single or optional)*/
 </xsl:if><xsl:if test="gpu:partitioningSpatial">//Spatial Partitioning Variables
@@ -373,7 +373,7 @@ __FLAME_GPU_FUNC__ void set_<xsl:value-of select="xmml:name"/>_agent_array_value
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /* Dynamically created <xsl:value-of select="xmml:name"/> message functions */
 
-<xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge">
+<xsl:if test="gpu:partitioningNone or gpu:partitioningSpatial or gpu:partitioningGraphEdge or gpu:partitioningKeyBased">
 /** add_<xsl:value-of select="xmml:name"/>_message
  * Add non partitioned or spatially partitioned <xsl:value-of select="xmml:name"/> message
  * @param messages xmachine_message_<xsl:value-of select="xmml:name"/>_list message list to add too<xsl:for-each select="xmml:variables/gpu:variable">
@@ -1307,6 +1307,154 @@ __global__ void reorder_<xsl:value-of select="xmml:name"/>_messages(unsigned int
 
 </xsl:if>
 
+
+<xsl:if test="gpu:partitioningKeyBased">
+<xsl:variable name="message_name" select="xmml:name" />
+<xsl:variable name="maxKey" select="gpu:partitioningKeyBased/gpu:maxKey"/>
+<xsl:variable name="key_variable_name" select="gpu:partitioningKeyBased/gpu:messageKey"/>
+<xsl:variable name="key_variable_type" select="xmml:variables/gpu:variable[xmml:name=$key_variable_name]/xmml:type"/>
+/* Message functions */
+
+/*
+ * Load the next key partitioned <xsl:value-of select="xmml:name"/> messag (either from SM or next batch load)
+ * @param messages message list 
+ * @param message_bounds key messaging data structure
+ * @param <xsl:value-of select="$key_variable_name"/> target key index
+ * @param messageIndex index of the message
+ * @return boolean indicating if a message was loaded or not.
+ */
+__device__ bool load_<xsl:value-of select="xmml:name"/>_message(xmachine_message_<xsl:value-of select="xmml:name"/>_list* messages, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds, unsigned int <xsl:value-of select="$key_variable_name"/>, unsigned int messageIndex){
+	// Define smem stuff
+	extern __shared__ int sm_data[];
+	char* message_share = (char*)&amp;sm_data[0];
+
+	// If the taget message is greater than the number of messages return false.
+	if (messageIndex >= d_message_<xsl:value-of select="xmml:name"/>_count){
+		return false;
+	}
+	
+	// Load the max value from the boundary struct.
+	unsigned int firstMessageForKey = message_bounds->start[<xsl:value-of select="$key_variable_name"/>];
+	
+	unsigned int messageForNextKey = firstMessageForKey + message_bounds->count[<xsl:value-of select="$key_variable_name"/>];
+
+
+	// If there are no other messages return false
+	if (messageIndex &lt; firstMessageForKey || messageIndex &gt;= messageForNextKey){
+		return false;
+	}
+
+	// Get the message data for the target message
+	xmachine_message_<xsl:value-of select="xmml:name"/> temp_message;
+	temp_message._position = messages-&gt;_position[messageIndex];
+	<xsl:for-each select="xmml:variables/gpu:variable">temp_message.<xsl:value-of select="xmml:name"/> = messages-&gt;<xsl:value-of select="xmml:name"/>[messageIndex];
+	</xsl:for-each>
+
+	// Load the message into shared memory. No sync?
+	<!-- @optimisation better use of shared memory - currently each thread pulls the same value into shared memory? -->
+	int message_index = SHARE_INDEX(threadIdx.y * blockDim.x + threadIdx.x, sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>));
+	xmachine_message_<xsl:value-of select="xmml:name"/>* sm_message = ((xmachine_message_<xsl:value-of select="xmml:name"/>*)&amp;message_share[message_index]);
+	sm_message[0] = temp_message;
+	
+	return true;
+}
+
+/**
+ * Get the first message from the <xsl:value-of select="xmml:name"/> edge partitioned message list
+ * @param messages  the message list
+ * @param message_bounds boundary data structure for key partitioned messages
+ * @param <xsl:value-of select="$key_variable_name"/> target key for messages
+ * @return pointer to the message.
+ */
+__device__ xmachine_message_<xsl:value-of select="xmml:name"/>* get_first_<xsl:value-of select="xmml:name"/>_message(xmachine_message_<xsl:value-of select="xmml:name"/>_list* messages, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds, unsigned int <xsl:value-of select="$key_variable_name"/>){
+
+	extern __shared__ int sm_data[];
+	char* message_share = (char*)&amp;sm_data[0];
+
+	// Get the first index for the target key.
+	unsigned int firstMessageIndex = message_bounds-&gt;start[<xsl:value-of select="$key_variable_name"/>];
+
+	if (load_<xsl:value-of select="xmml:name"/>_message(messages, message_bounds, <xsl:value-of select="$key_variable_name"/>, firstMessageIndex))
+	{
+		unsigned int message_index = SHARE_INDEX(threadIdx.y*blockDim.x + threadIdx.x, sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>));
+		return ((xmachine_message_<xsl:value-of select="xmml:name"/>*)&amp;message_share[message_index]);
+	}
+	else
+	{
+		return nullptr;
+	}
+}
+
+/**
+ * Get the next message from the <xsl:value-of select="xmml:name"/> key partitioned message list
+ * @param messages  the message list
+ * @param message_bounds boundary data structure for key partitioned messages
+ * @return pointer to the message.
+ */
+__device__ xmachine_message_<xsl:value-of select="xmml:name"/>* get_next_<xsl:value-of select="xmml:name"/>_message(xmachine_message_<xsl:value-of select="xmml:name"/>* message, xmachine_message_<xsl:value-of select="xmml:name"/>_list* messages, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds){
+	extern __shared__ int sm_data[];
+	char* message_share = (char*)&amp;sm_data[0];
+
+	if (load_<xsl:value-of select="xmml:name"/>_message(messages, message_bounds, message-&gt;<xsl:value-of select="$key_variable_name"/>, message-&gt;_position + 1))
+	{
+		//get conflict free address of 
+		unsigned int message_index = SHARE_INDEX(threadIdx.y*blockDim.x + threadIdx.x, sizeof(xmachine_message_<xsl:value-of select="xmml:name"/>));
+		return ((xmachine_message_<xsl:value-of select="xmml:name"/>*)&amp;message_share[message_index]);
+	}
+	else {
+		return nullptr;
+	}
+	
+}
+
+/**
+ * Generate a histogram of <xsl:value-of select="xmml:name"/> messages per key
+ * @param local_index
+ * @param unsorted_index
+ * @param message_counts
+ * @param messages
+ * @param agent_count
+ */
+__global__ void hist_<xsl:value-of select="xmml:name"/>_messages(unsigned int* local_index, unsigned int * unsorted_index, unsigned int* message_counts, xmachine_message_<xsl:value-of select="xmml:name"/>_list * messages, unsigned int agent_count){
+	unsigned int index = threadIdx.x + blockDim.x * blockIdx.x;
+
+	if (index &gt;= agent_count){
+		return;
+	}
+	<xsl:value-of select="$key_variable_type"/><xsl:text> </xsl:text><xsl:value-of select="$key_variable_name"/> = messages-&gt;<xsl:value-of select="$key_variable_name"/>[index];
+	unsigned int bin_index = atomicInc((unsigned int*)&amp;message_counts[<xsl:value-of select="$key_variable_name"/>], 0xFFFFFFFF);
+	local_index[index] = bin_index;
+	unsorted_index[index] = <xsl:value-of select="$key_variable_name"/>;
+}
+
+/**
+ * Reorder <xsl:value-of select="xmml:name"/> messages for key partitioned communication
+ * @param local_index
+ * @param unsorted_index
+ * @param start_index
+ * @param unordered_messages
+ * @param ordered_messages
+ * @param agent_count
+ */
+__global__ void reorder_<xsl:value-of select="xmml:name"/>_messages(unsigned int* local_index, unsigned int* unsorted_index, unsigned int* start_index, xmachine_message_<xsl:value-of select="xmml:name"/>_list* unordered_messages, xmachine_message_<xsl:value-of select="xmml:name"/>_list* ordered_messages, unsigned int agent_count){
+	unsigned int index = threadIdx.x + blockDim.x * blockIdx.x;
+
+	if (index &gt;= agent_count){
+		return;
+	}
+
+	unsigned int sorted_index = local_index[index] + start_index[unsorted_index[index]];
+	
+	// The position value should be updated to reflect the new position.
+	ordered_messages->_position[sorted_index] = sorted_index;
+	ordered_messages->_scan_input[sorted_index] = unordered_messages-&gt;_scan_input[index];
+
+	<xsl:for-each select="xmml:variables/gpu:variable">ordered_messages-&gt;<xsl:value-of select="xmml:name"/>[sorted_index] = unordered_messages-&gt;<xsl:value-of select="xmml:name"/>[index];
+	</xsl:for-each>
+}
+
+</xsl:if>
+
 </xsl:for-each>
 	
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1318,7 +1466,7 @@ __global__ void reorder_<xsl:value-of select="xmml:name"/>_messages(unsigned int
  *
  */
 __global__ void GPUFLAME_<xsl:value-of select="xmml:name"/>(xmachine_memory_<xsl:value-of select="../../xmml:name"/>_list* agents<xsl:if test="xmml:xagentOutputs/gpu:xagentOutput">, xmachine_memory_<xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_list* <xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_agents</xsl:if>
-	<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, xmachine_message_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_list* <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, xmachine_message_<xsl:value-of select="xmml:name"/>_PBM* partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if></xsl:for-each></xsl:if>
+	<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, xmachine_message_<xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_list* <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, xmachine_message_<xsl:value-of select="xmml:name"/>_PBM* partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if><xsl:if test="gpu:partitioningKeyBased">, xmachine_message_<xsl:value-of select="xmml:name"/>_bounds* message_bounds</xsl:if></xsl:for-each></xsl:if>
 	<xsl:if test="xmml:outputs/gpu:output">, xmachine_message_<xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_list* <xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_messages</xsl:if>
 	<xsl:if test="gpu:RNG='true'">, RNG_rand48* rand48</xsl:if>){
 	
@@ -1368,7 +1516,7 @@ __global__ void GPUFLAME_<xsl:value-of select="xmml:name"/>(xmachine_memory_<xsl
 
 	//FLAME function call
 	<xsl:if test="../../gpu:type='continuous'">int dead = !</xsl:if><xsl:value-of select="xmml:name"/>(&amp;agent<xsl:if test="xmml:xagentOutputs/gpu:xagentOutput">, <xsl:value-of select="xmml:xagentOutputs/gpu:xagentOutput/xmml:xagentName"/>_agents</xsl:if>
-	<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, message_bounds</xsl:if></xsl:for-each></xsl:if>
+	<xsl:if test="xmml:inputs/gpu:input"><xsl:variable name="messagename" select="xmml:inputs/gpu:input/xmml:messageName"/>, <xsl:value-of select="xmml:inputs/gpu:input/xmml:messageName"/>_messages<xsl:for-each select="../../../../xmml:messages/gpu:message[xmml:name=$messagename]"><xsl:if test="gpu:partitioningSpatial">, partition_matrix</xsl:if><xsl:if test="gpu:partitioningGraphEdge">, message_bounds</xsl:if><xsl:if test="gpu:partitioningKeyBased">, message_bounds</xsl:if></xsl:for-each></xsl:if>
 	<xsl:if test="xmml:outputs/gpu:output">, <xsl:value-of select="xmml:outputs/gpu:output/xmml:messageName"/>_messages	</xsl:if>
 	<xsl:if test="gpu:RNG='true'">, rand48</xsl:if>);
 	
