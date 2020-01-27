@@ -66,12 +66,20 @@
 			</xs:extension>
 		</xs:complexContent>
 	</xs:complexType>
+	<xs:complexType name="bufferSize_type">
+		<xs:simpleContent>
+			<xs:extension base="xs:int">
+				<xs:attribute name="id" type="xs:string"/>
+				<xs:attribute name="relativeBufferSize" type="xs:string"/>
+			</xs:extension>
+		</xs:simpleContent>
+	</xs:complexType>
 	<xs:complexType name="xagent_type">
 		<xs:complexContent>
 			<xs:extension base="xmml:xagent_type">
 				<xs:sequence>
 					<xs:element name="type" type="xagent_type_options" />
-					<xs:element name="bufferSize" type="xs:int" />
+					<xs:element name="bufferSize" type="bufferSize_type" />
 				</xs:sequence>
 			</xs:extension>
 		</xs:complexContent>
@@ -116,7 +124,7 @@
 			<xs:extension base="xmml:message_type">
 				<xs:sequence>
 					<xs:element ref="partitioningNone" />
-					<xs:element name="bufferSize" type="xs:int" />
+					<xs:element name="bufferSize" type="bufferSize_type" />
 				</xs:sequence>
 			</xs:extension>
 		</xs:complexContent>

@@ -303,10 +303,13 @@ GENCODE_FLAGS += -gencode arch=compute_$(HIGHEST_SM),code=compute_$(HIGHEST_SM)
 endif
 endif
 
+# Variables related to buffer size scaling.
+MODIFY_BUFFER_SIZES_PY := $(FLAMEGPU_ROOT)tools/modify-buffer-sizes.py
+
 ################################################################################
 
 # Mark several targets as PHONY, i.e. they do not create a file of the target name
-.PHONY: help all validate xslt visualisation console clean clobber makedirs functions.c
+.PHONY: help all validate xslt visualisation console clean clobber makedirs functions.c update_buffer_sizes
 
 # When make all is called, the model is validated, all xslt is generated and then both console and visualisation targets are built
 ifeq ($(HAS_VISUALISATION), 1)
@@ -445,6 +448,10 @@ endif
 # Rule to create the console binary by linking the dependant object files.
 $(TARGET_CONSOLE): $(CONSOLE_DEPENDANCIES)
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+
+
+# Update buffer sizes in model file using python script
+update_buffer_sizes: $(XML_MODEL_FILE) $(MODIFY_BUFFER_SIZES_PY)
+	$(MODIFY_BUFFER_SIZES_PY) $(XML_MODEL_FILE) 
 
 # Clean object files, but do not regenerate xslt. `|| true` is used to support the case where dirs do not exist.
 clean:
