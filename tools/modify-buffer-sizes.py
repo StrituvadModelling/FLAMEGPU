@@ -89,6 +89,13 @@ def ceil_pow2(x):
     res = int(pow(2, math.ceil(math.log(x) / math.log(2))))
     return res
 
+def str2int(x, invalid_value=0):
+    try:
+        val = int(x)
+        return val
+    except:
+        return invalid_value
+
 # @todo - don't use eval / validate the string beforehand
 # @todo - build a variable dependency graph, by splitting math operators out of equations, to figure out which order to compute values in. 
 def update_buffer_sizes(args, xml_in):
@@ -205,18 +212,27 @@ def update_buffer_sizes(args, xml_in):
 
     # Results are stored back in the buffer_sizes_id_and_compute and buffer_sizes_compute_only dict/lists
     # Update the XML and store values for formatted output.
-    data = []
+
+    section_0 = []
     for k, v in buffer_sizes_id_only.items():
-        data.append([k, "", str(v["val"])])
+        section_0.append([k, "", str(v["val"])])
+    section_0 = sorted(section_0, key=lambda row: row[0])
+    section_0 = sorted(section_0, key=lambda row: str2int(row[2]), reverse=True)
 
+    section_1 = []
     for k, v in buffer_sizes_id_and_compute.items():
-        data.append([k, v["xml"].text, str(v["val"])])
+        section_1.append([k, str(v["xml"].text), str(v["val"])])
         v["xml"].text = str(v["val"])
-
     for x in buffer_sizes_compute_only:
-        data.append(["???", x["xml"].text, str(x["val"])])
+        section_1.append(["???", str(x["xml"].text), str(x["val"])])
         x["xml"].text = str(x["val"])
+    section_1 = sorted(section_1, key=lambda row: row[0])
+    section_1 = sorted(section_1, key=lambda row: str2int(row[2]), reverse=True)
+    section_1 = sorted(section_1, key=lambda row: str2int(row[1]), reverse=True)
 
+
+
+    data = section_0 + section_1
 
     # Print output.
     print("Buffer Sizes:")
