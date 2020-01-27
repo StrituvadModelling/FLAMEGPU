@@ -157,7 +157,10 @@ def update_buffer_sizes(args, xml_in):
 
     # Add each id only value to the computed values
     for k in buffer_sizes_id_only:
-        computed_values[k] = buffer_sizes_id_only[k]["val"]
+        # But round up to the nearest pow of 2
+        rounded = ceil_pow2(int(buffer_sizes_id_only[k]["val"]))
+        computed_values[k] = rounded
+        buffer_sizes_id_only[k]["val"] = rounded
 
     # For each compute and id value, calculate and store.
     # @note - it is possible this would never complete if dependency circle - DAG validation would fix this.
