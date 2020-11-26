@@ -1571,9 +1571,14 @@ void h_add_agents_<xsl:value-of select="$agent_name" />_<xsl:value-of select="$s
   <xsl:variable name="state" select="xmml:name"/>
 <xsl:for-each select="../../xmml:memory/gpu:variable">
 <xsl:if test="not(xmml:arrayLength)"> <!-- Disable agent array reductions -->
-<xsl:value-of select="xmml:type"/> reduce_<xsl:value-of select="$agent_name"/>_<xsl:value-of select="$state"/>_<xsl:value-of select="xmml:name"/>_variable(){
+template &lt;typename T&gt;
+T reduce_<xsl:value-of select="$agent_name"/>_<xsl:value-of select="$state"/>_<xsl:value-of select="xmml:name"/>_variable(){
     //reduce in default stream
-    return thrust::reduce(thrust::device_pointer_cast(d_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>-><xsl:value-of select="xmml:name"/>),  thrust::device_pointer_cast(d_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>-><xsl:value-of select="xmml:name"/>) + h_xmachine_memory_<xsl:value-of select="$agent_name"/>_<xsl:value-of select="$state"/>_count);
+    return thrust::reduce(
+		thrust::device_pointer_cast(d_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>-><xsl:value-of select="xmml:name"/>),  
+		thrust::device_pointer_cast(d_<xsl:value-of select="$agent_name"/>s_<xsl:value-of select="$state"/>-><xsl:value-of select="xmml:name"/>) + h_xmachine_memory_<xsl:value-of select="$agent_name"/>_<xsl:value-of select="$state"/>_count,
+		T(0)
+		);
 }
 
 <xsl:if test="contains(xmml:type, 'int')">
