@@ -140,7 +140,7 @@ override SMS = $(TMP_SMS)
 
 # Flags used for compilation.
 # NVCC compiler flags
-NVCCFLAGS   := -m64
+NVCCFLAGS   := -m64 --Wno-deprecated-declarations
 # Host compiler flags (gcc/cicc etc), passed to nvcc using -Xcompiler
 CCFLAGS     := 
 # NVCC linker flags
