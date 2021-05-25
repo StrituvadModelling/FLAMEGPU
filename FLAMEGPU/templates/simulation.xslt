@@ -470,6 +470,46 @@ extern unsigned int getIterationNumber(){
 void update_device_<xsl:value-of select="$agent_name"/>_from_host();
 </xsl:for-each>
 
+
+/* RNG (re)initialisation method implementation */
+__host__ void seed_RNG_rand48(unsigned long long seed) {
+	PROFILE_PUSH_RANGE("Initialse RNG_rand48");
+	// @note- h_rand48 and d_rand48 are never free'd.
+	if(h_rand48 == NULL){
+		h_rand48 = (RNG_rand48*)malloc(sizeof(RNG_rand48));
+	}
+	if(d_rand48 == NULL){
+		//allocate on GPU
+		gpuErrchk( cudaMalloc( (void**) &amp;d_rand48, sizeof(RNG_rand48)));
+	}
+	// calculate strided iteration constants
+	static const unsigned long long a = 0x5DEECE66DLL, c = 0xB;
+
+
+	unsigned long long A, C;
+	A = 1LL; C = 0LL;
+	for (unsigned int i = 0; i &lt; buffer_size_MAX; ++i) {
+		C += A*c;
+		A *= a;
+	}
+	h_rand48->A.x = A &amp; 0xFFFFFFLL;
+	h_rand48->A.y = (A >> 24) &amp; 0xFFFFFFLL;
+	h_rand48->C.x = C &amp; 0xFFFFFFLL;
+	h_rand48->C.y = (C >> 24) &amp; 0xFFFFFFLL;
+	// prepare first nThreads random numbers from seed
+	unsigned long long x = (((unsigned long long)seed) &lt;&lt; 16) | 0x330E;
+	for (unsigned int i = 0; i &lt; buffer_size_MAX; ++i) {
+		x = a*x + c;
+		h_rand48->seeds[i].x = x &amp; 0xFFFFFFLL;
+		h_rand48->seeds[i].y = (x >> 24) &amp; 0xFFFFFFLL;
+	}
+	//copy to device
+	gpuErrchk( cudaMemcpy( d_rand48, h_rand48, sizeof(RNG_rand48), cudaMemcpyHostToDevice));
+
+    PROFILE_POP_RANGE();
+}
+
+
 void initialise(char * inputfile){
     PROFILE_SCOPED_RANGE("initialise");
 
@@ -675,15 +715,7 @@ void initialise(char * inputfile){
 	h_<xsl:value-of select="../xmml:name"/>_condition_false_count = 0;
 	</xsl:for-each>
 
-	/* RNG rand48 */
-    PROFILE_PUSH_RANGE("Initialse RNG_rand48");
-	int h_rand48_SoA_size = sizeof(RNG_rand48);
-	h_rand48 = (RNG_rand48*)malloc(h_rand48_SoA_size);
-	//allocate on GPU
-	gpuErrchk( cudaMalloc( (void**) &amp;d_rand48, h_rand48_SoA_size));
-	// calculate strided iteration constants
-	static const unsigned long long a = 0x5DEECE66DLL, c = 0xB;
-
+	/* RNG rand48 */    
 <!-- If there is a RAND_SEED environment var, use it to seed the GPU rng seed list (for variance) -->
 <xsl:choose>
   <xsl:when test="gpu:xmodel/gpu:environment/gpu:constants/gpu:variable[xmml:name='RAND_SEED']">
@@ -700,27 +732,8 @@ void initialise(char * inputfile){
   </xsl:otherwise>
 </xsl:choose>
 
-	unsigned long long A, C;
-	A = 1LL; C = 0LL;
-	for (unsigned int i = 0; i &lt; buffer_size_MAX; ++i) {
-		C += A*c;
-		A *= a;
-	}
-	h_rand48->A.x = A &amp; 0xFFFFFFLL;
-	h_rand48->A.y = (A >> 24) &amp; 0xFFFFFFLL;
-	h_rand48->C.x = C &amp; 0xFFFFFFLL;
-	h_rand48->C.y = (C >> 24) &amp; 0xFFFFFFLL;
-	// prepare first nThreads random numbers from seed
-	unsigned long long x = (((unsigned long long)seed) &lt;&lt; 16) | 0x330E;
-	for (unsigned int i = 0; i &lt; buffer_size_MAX; ++i) {
-		x = a*x + c;
-		h_rand48->seeds[i].x = x &amp; 0xFFFFFFLL;
-		h_rand48->seeds[i].y = (x >> 24) &amp; 0xFFFFFFLL;
-	}
-	//copy to device
-	gpuErrchk( cudaMemcpy( d_rand48, h_rand48, h_rand48_SoA_size, cudaMemcpyHostToDevice));
-
-    PROFILE_POP_RANGE();
+	// Seed with the default seed. This can then be re-seeded in host functions such as init functions.
+	seed_RNG_rand48(seed);
 
 	/* Call all init functions */
 	/* Prepare cuda event timers for instrumentation */

@@ -356,6 +356,11 @@ __FLAME_GPU_HOST_FUNC__ __FLAME_GPU_FUNC__ unsigned int get_staticGraph_<xsl:val
   };
 
 
+/**
+ * Seed the device RNG_rand48 engine from the host. 
+ */ 
+__host__ void seed_RNG_rand48(unsigned long long seed);
+
 /** getOutputDir
 * Gets the output directory of the simulation. This is the same as the 0.xml input directory.
 * @return a const char pointer to string denoting the output directory
