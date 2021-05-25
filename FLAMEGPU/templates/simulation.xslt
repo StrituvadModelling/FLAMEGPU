@@ -198,6 +198,16 @@ int PADDING;
 
 unsigned int g_iterationNumber;
 
+// Layer function control
+/* Control flags to disable/enable agent/hostlayer functions */
+<xsl:for-each select="gpu:xmodel/xmml:xagents/gpu:xagent/xmml:functions/gpu:function">
+bool enabled_layer_function_<xsl:value-of select="xmml:name"/> = true;
+</xsl:for-each>
+<xsl:for-each select="gpu:xmodel/gpu:environment/gpu:hostLayerFunctions/gpu:hostLayerFunction"> 
+bool enabled_layer_function_<xsl:value-of select="gpu:name"/> = true;
+</xsl:for-each>
+
+
 /* Agent Memory */
 <xsl:for-each select="gpu:xmodel/xmml:xagents/gpu:xagent">
 /* <xsl:value-of select="xmml:name"/> Agent variables these lists are used in the agent function where as the other lists are used only outside the agent functions*/
@@ -973,7 +983,9 @@ PROFILE_SCOPED_RANGE("singleIteration");
   cudaEventRecord(instrument_start);
 #endif
     PROFILE_PUSH_RANGE("<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>");
-	<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="$function"/>(stream<xsl:value-of select="$stream_num"/>);
+	if(get_enabled_layer_function_<xsl:value-of select="$function"/>()){
+		<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="$function"/>(stream<xsl:value-of select="$stream_num"/>);
+	}
     PROFILE_POP_RANGE();
 #if defined(INSTRUMENT_AGENT_FUNCTIONS) &amp;&amp; INSTRUMENT_AGENT_FUNCTIONS
   cudaEventRecord(instrument_stop);
@@ -984,12 +996,15 @@ PROFILE_SCOPED_RANGE("singleIteration");
   </xsl:for-each>
   <!-- Host layer functions -->
   <!-- @todo - do we need to syncrhonize here to avoid host and device concurrency? -->
-  <xsl:for-each select="../../../gpu:environment/gpu:hostLayerFunctions/gpu:hostLayerFunction[gpu:name=$function]">
+<xsl:for-each select="../../../gpu:environment/gpu:hostLayerFunctions/gpu:hostLayerFunction[gpu:name=$function]">
 #if defined(INSTRUMENT_AGENT_FUNCTIONS) &amp;&amp; INSTRUMENT_AGENT_FUNCTIONS
   cudaEventRecord(instrument_start);
 #endif
-    PROFILE_PUSH_RANGE("hostLayerFunction_<xsl:value-of select="$function"/>");
-  <xsl:value-of select="$function"/>();
+	if(get_enabled_layer_function_<xsl:value-of select="$function"/>()){
+		PROFILE_PUSH_RANGE("hostLayerFunction_<xsl:value-of select="$function"/>");
+	<xsl:value-of select="$function"/>();
+	};
+	PROFILE_POP_RANGE();
 #if defined(INSTRUMENT_AGENT_FUNCTIONS) &amp;&amp; INSTRUMENT_AGENT_FUNCTIONS
   cudaEventRecord(instrument_stop);
   cudaEventSynchronize(instrument_stop);
@@ -1639,7 +1654,6 @@ std::ptrdiff_t countif_<xsl:value-of select="$agent_name"/>_<xsl:value-of select
 </xsl:for-each>
 </xsl:for-each>
 </xsl:for-each>
-
 
 /* Agent functions */
 
@@ -2333,6 +2347,24 @@ void <xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>
 extern void reset_AntigenList_<xsl:value-of select="xmml:name"/>_count()
 {
     h_xmachine_memory_<xsl:value-of select="../../xmml:name"/>_<xsl:value-of select="xmml:name"/>_count = 0;
+}
+</xsl:for-each>
+
+/* Control flags to disable/enable agent/hostlayer functions */
+<xsl:for-each select="gpu:xmodel/xmml:xagents/gpu:xagent/xmml:functions/gpu:function">
+bool get_enabled_layer_function_<xsl:value-of select="xmml:name"/>(){
+	return enabled_layer_function_<xsl:value-of select="xmml:name"/>;
+}
+void set_enabled_layer_function_<xsl:value-of select="xmml:name"/>(bool enabled){
+	enabled_layer_function_<xsl:value-of select="xmml:name"/> = enabled;
+}
+</xsl:for-each>
+<xsl:for-each select="gpu:xmodel/gpu:environment/gpu:hostLayerFunctions/gpu:hostLayerFunction"> 
+bool get_enabled_layer_function_<xsl:value-of select="gpu:name"/>(){
+	return enabled_layer_function_<xsl:value-of select="gpu:name"/>;
+}
+void set_enabled_layer_function_<xsl:value-of select="gpu:name"/>(bool enabled){
+	enabled_layer_function_<xsl:value-of select="gpu:name"/> = enabled;
 }
 </xsl:for-each>
     

@@ -864,6 +864,15 @@ extern const <xsl:value-of select="xmml:type"/>* get_<xsl:value-of select="xmml:
 extern <xsl:value-of select="xmml:type"/><xsl:text> h_env_</xsl:text><xsl:value-of select="xmml:name"/><xsl:if test="xmml:arrayLength">[<xsl:value-of select="xmml:arrayLength"/>]</xsl:if>;
 </xsl:for-each>
 
+/* Control flags to disable/enable agent/hostlayer functions */
+<xsl:for-each select="gpu:xmodel/xmml:xagents/gpu:xagent/xmml:functions/gpu:function">
+bool get_enabled_layer_function_<xsl:value-of select="xmml:name"/>();
+void set_enabled_layer_function_<xsl:value-of select="xmml:name"/>(bool enabled);
+</xsl:for-each>
+<xsl:for-each select="gpu:xmodel/gpu:environment/gpu:hostLayerFunctions/gpu:hostLayerFunction"> 
+bool get_enabled_layer_function_<xsl:value-of select="gpu:name"/>();
+void set_enabled_layer_function_<xsl:value-of select="gpu:name"/>(bool enabled);
+</xsl:for-each>
 /** getMaximumBound
  * Returns the maximum agent positions determined from the initial loading of agents
  * @return 	a three component float indicating the maximum x, y and z positions of all agents
